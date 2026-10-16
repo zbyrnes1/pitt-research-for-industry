@@ -466,6 +466,7 @@ function offerAreas(names,check){
 document.getElementById("areaPicks").addEventListener("change",e=>{ if(e.target.matches("input")) picks.set(e.target.value,e.target.checked); });
 document.addEventListener("click",e=>{ const a=e.target.closest("a[data-area]"); if(!a) return; offerAreas([a.dataset.area],true); });
 const cform=document.getElementById("cform");
+if(new URLSearchParams(location.search).get("sent")==="1"){ cform.classList.add("sent"); document.getElementById("cmsg").textContent="Thanks, we've got it. We'll be in touch within a few business days."; }
 cform.addEventListener("submit",async e=>{
   e.preventDefault();
   const f=new FormData(cform), msg=document.getElementById("cmsg"), btn=document.getElementById("csend");
@@ -486,6 +487,13 @@ cform.addEventListener("submit",async e=>{
     if(!r.ok||String(j.success)==="false") throw new Error(j.message||"send failed");
     cform.classList.add("sent"); msg.textContent="Thanks, we've got it. We'll be in touch within a few business days.";
   }catch(err){
+    // on a normal web host, fall back to FormSubmit's standard form post; it returns the visitor here with ?sent=1
+    if(location.protocol.startsWith("http")&&!/claude|anthropic|usercontent|localhost|127\.0\.0\.1/.test(location.hostname)){
+      const post=document.createElement("form"); post.method="POST"; post.action=FORM_TO.replace("/ajax/","/"); post.hidden=true;
+      const next=new URL(location.href); next.hash="contact"; next.searchParams.set("sent","1");
+      Object.entries({...body,_next:next.toString()}).forEach(([k,v])=>{ const i=document.createElement("input"); i.type="hidden"; i.name=k; i.value=v; post.appendChild(i); });
+      document.body.appendChild(post); msg.textContent="Sending…"; post.submit(); return;
+    }
     // the request was blocked or failed: hand the same details to the visitor's email app instead
     const lines=Object.entries(body).filter(([k])=>!k.startsWith("_")).map(([k,v])=>`${k.replace("_"," ")}: ${v}`).join("\n");
     msg.innerHTML=`Couldn't send from this page. <a href="mailto:zjbyrnes@gmail.com?subject=${encodeURIComponent(body._subject)}&body=${encodeURIComponent(lines)}">Send it by email instead</a>.`;
